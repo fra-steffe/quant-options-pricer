@@ -10,20 +10,19 @@ class BlackScholesModel:
     def __init__(self, risk_free_rate: float, volatility: float):
         self.r = risk_free_rate
         self.sigma = volatility
-        
-    def _d1(self, S:float, K: float, T: float) -> float:
+
         #calcola il parametro d1 (assume T > TIME_EPSILON)
+    def _d1(self, S:float, K: float, T: float) -> float:
         return (np.log(S/K) + (self.r + 0.5 * self.sigma**2) * T) / (self.sigma * np.sqrt(T))
-                                                                     
+        #calcola il parametro d2 (assume T > TIME_EPSILON)                                                         
     def _d2( self, d1_value: float, T: float) -> float:
-        #calcola il parametro d2 (assume T > TIME_EPSILON)
         return d1_value - self.sigma * np.sqrt(T)
+    #calcola il prezzo dell'opzione usando la formula di Black-Scholes
     def price(self, option) -> float:
-        #calcola il prezzo dell'opzione usando la formula di Black-Scholes
         S = option.underlying
         K = option.strike
         T = option.T
-        # Gestione robusta della scadenza: se T è quasi zero, restituisci il payoff intrinseco
+        # se T è quasi zero, restituisci il payoff intrinseco
         if T <= BlackScholesModel.TIME_EPSILON:
             return option.payoff(S)
         d1 = self._d1(S, K, T)
@@ -35,8 +34,10 @@ class BlackScholesModel:
             return K * np.exp(-self.r * T) * norm.cdf(-d2) - S * norm.cdf(-d1)
         else:
             raise ValueError("Unsupported option type")
+
+    ##calcola la vega dell'opzione usando la formula di Black-Scholes
     def vega(self,option) -> float:
-        #calcola la vega dell'opzione usando la formula di Black-Scholes
+        
         S = option.underlying
         K = option.strike
         T = option.T
@@ -50,9 +51,8 @@ class BlackScholesModel:
 
 
 
-       
+        #motore di pricing Monte Carlo per opzioni senza dover usare formule chiuse
 class MonteCarloPricer:
-    #motore di pricing Monte Carlo per opzioni senza formule chiuse
     def __init__(self, risk_free_rate: float, volatility: float, num_paths: int= 10000, num_steps: int= 100):
 
         self.r = risk_free_rate
@@ -60,9 +60,7 @@ class MonteCarloPricer:
         self.num_paths = num_paths #numero di simulazioni
         self.num_steps = num_steps #numero di step temporali per ogni simulazione
     def _generate_z(self)-> np.ndarray:
-        #Creiamo una matrice di dimensioni (n_paths, n_steps) riempita di numeri estratti da una Normale Standard. la useremo per vettorizzare i calcoli
-        #Questi numeri rappresentano i "colpi di scena" casuali che influenzeranno l'evoluzione del prezzo dell'asset sottostante in ogni simulazione.
-        # Righe = percorsi (paths), Colonne = step temporali (steps)
+        #Creiamo una matrice di dimensioni (n_paths, n_steps) riempita di numeri estratti da una Normale Standard, serve a rappresentare gli shock nella simulazione.
         half_paths = int(self.num_paths / 2)#Calcolo la metà esatta dei percorsi necessari
         z_half = np.random.standard_normal((half_paths, self.num_steps)) #Genera la prima metà dei percorsi con numeri casuali standard
         z_anti = -z_half #Creo la seconda metà dei percorsi usando l'antithetic variate (inversione dei numeri casuali) per ridurre la varianza
@@ -71,8 +69,9 @@ class MonteCarloPricer:
             extra_z = np.random.standard_normal((1, self.num_steps)) #Genera un percorso extra
             Z = np.concatenate((Z, extra_z), axis=0) #Aggiunge il percorso extra alla matrice Z
         return np.random.standard_normal((self.num_paths, self.num_steps))
+
+    #Simuliamo i percorsi del prezzo dell'asset sottostante usando il modello di moto browniano geometrico.
     def _simulate_paths(self, S0: float, T: float) -> np.ndarray:
-        #Simuliamo i percorsi del prezzo dell'asset sottostante usando il modello di moto browniano geometrico.
         dt = T / self.num_steps #calcoliamo il passo temporale
         Z = self._generate_z() #matrice di shock casuali
         drift = (self.r - 0.5 * self.sigma**2) * dt #componente deterministica del movimento del prezzo
@@ -88,13 +87,13 @@ class MonteCarloPricer:
     def price(self, option) -> float:
         #calcolo il prezzo usando la media dei payoff scontati 
         S0 = option.underlying
-        T = option.T #estraggo i dati del contratto da Option
-        if T <= BlackScholesModel.TIME_EPSILON: #gestione robusta della scadenza: se T è quasi zero, restituisci il payoff intrinseco
-            return option.payoff(S0) #se l'opzione è scaduta, restituisci il payoff intrinseco. uso lo stesso criterio di scadenza del modello di Black-Scholes per coerenza
+        T = option.T 
+        if T <= BlackScholesModel.TIME_EPSILON:
+            return option.payoff(S0) 
         S_t = self._simulate_paths(S0, T) #simuliamo i percorsi del prezzo sottostante
         final_prices = self._get_final_prices(S_t) #estraiamo i prezzi finali alla scadenza
         final_payoffs = option.payoff(final_prices) #calcoliamo il payoff finale per ogni percorso
         expected_payoff = np.mean(final_payoffs) #calcoliamo la media dei payoff
         discount_factor = np.exp(-self.r * T) #calcoliamo il fattore di sconto per portare il valore attuale
         theoretical_price = expected_payoff * discount_factor #prezzo teorico come payoff atteso scontato risk-neutral
-        return float(theoretical_price) #restituiamo il prezzo come float, anche se è già un float, per coerenza con il tipo di ritorno dichiarato
+        return float(theoretical_price) 

@@ -6,14 +6,9 @@ import yfinance as yf
 class DataProvider(abc.ABC): #classe astratta per i data scraper, definisce l'interfaccia che tutti i data scraper devono implementare
     @abc.abstractmethod
     def get_option_chain(self, ticker: str, expiry_str: str) -> pd.DataFrame:
-        #metodo astratto che deve essere implementato da tutte le classi che ereditano da DataProvider. 
-        ## Chiunque scriva un connettore DEVE implementare get_options_chain. il metodo prende un ticker e una data di scadenza e restituisce un DataFrame con le opzioni disponibili per quel ticker e quella scadenza
-        pass #il pass è un segnaposto che indica che il metodo non ha ancora un'implementazione concreta. serve a far capire che questa è una funzione astratta che deve essere implementata dalle classi figlie. senza il pass, python solleverebbe un errore di sintassi perché non ci sarebbe alcun corpo per la funzione. con il pass, invece, la funzione è definita ma non fa nulla, permettendo alla classe di essere astratta e alle classi figlie di implementare il metodo in modo specifico.
+        pass 
     @abc.abstractmethod
     def get_expiration_dates(self, ticker: str) -> list:
-        #metodo astratto che deve essere implementato da tutte le classi che ereditano da DataProvider. 
-        ## Chiunque scriva un connettore DEVE implementare get_expiration_dates. il metodo prende un ticker e restituisce una lista di date di scadenza disponibili per quel ticker
-        #Il Main deve poter chiedere quali date esistono prima di poterne richiedere una
         pass
 
 #implementazione specifica per yaohoo finance

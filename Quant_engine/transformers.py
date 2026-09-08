@@ -7,7 +7,6 @@ class YahooDataTransformer:
     def __init__(self, current_date: str = None): # la data di riferimento per il pricing
        # se non viene specificata una data usiamo la data di oggi, altrimenti accetta una data in formato stringa 'YYYY-MM-DD' (come da yahoo finance) e la converte in un oggetto datetime
         if current_date is not None:
-            #converte il testo (stringa con formato 'YYYY-MM-DD') in un oggetto temporale datetime su cui possiamo fare operazioni di data
             self.current_date = datetime.strptime(current_date, "%Y-%m-%d")
         else:
             #oggi è la data di riferimento
@@ -26,11 +25,11 @@ class YahooDataTransformer:
         return T
     
     #pulisce il dataframe
-    def _clean_data(self, raw_df: pd.DataFrame) -> pd.DataFrame: #metodo privato
+    def _clean_data(self, raw_df: pd.DataFrame) -> pd.DataFrame:
         #Crea una copia indipendente del DataFrame per non alterare i dati originali in memoria.
         clean_df = raw_df.copy()
 
-        #elimina i le righe con valori nulli sulle colonne d'interesse
+        #elimina le righe con valori nulli sulle colonne d'interesse
         clean_df = clean_df.dropna(subset = ["strike", "lastPrice", 'volume'])
 
         #Mantieni solo le righe per opzioni liquide

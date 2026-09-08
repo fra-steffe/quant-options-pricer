@@ -44,7 +44,7 @@ def main():
         return
     
     # Test su una singola data
-    #prendiamo la prima scadenza per testare la pipeline
+    #prendiamo una scadenza a medio termine con buona liquidità. 
     expiry = dates[12]
     print(f"Scadenza selezionata: {expiry}")
 
