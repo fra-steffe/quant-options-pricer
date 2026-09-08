@@ -1,0 +1,13 @@
+# Ambiente virtuale
+.venv/
+venv/
+
+# Python
+__pycache__/
+*.py[cod]
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Output della pipeline
+superficie_iv_*.csv
