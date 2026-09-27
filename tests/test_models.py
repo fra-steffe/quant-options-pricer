@@ -1,4 +1,4 @@
-#TEST1: PUT-CALL PARITY
+"""Tests for Quant_engine.models."""
 
 import math
 
@@ -28,17 +28,19 @@ from Quant_engine.models import BlackScholesModel
         pytest.param(100.0, 100.0, 1.0, 0.05, 0.80, id="high_vol"),
     ],
 )
-
 def test_put_call_parity(spot, strike, maturity, rate, vol):
-#creates the models
+    """C - P must equal S - K * exp(-rT).
+
+    Catches errors in discounting and in the structure of the call and
+    put formulas. Blind to errors inside d1 and d2, because
+    N(x) + N(-x) = 1 for any x: those need a reference-value test.
+    """
     model = BlackScholesModel(risk_free_rate=rate, volatility=vol)
     call = EuropeanCall(underlying=spot, strike=strike, maturity=maturity)
     put = EuropeanPut(underlying=spot, strike=strike, maturity=maturity)
 
-#computes outputs
     call_price = model.price(call)
     put_price = model.price(put)
 
-#assert validity
     expected = spot - strike * math.exp(-rate * maturity)
-    assert call_price - put_price == pytest.approx(expected)
+    assert call_price - put_price == pytest.approx(expected) 
