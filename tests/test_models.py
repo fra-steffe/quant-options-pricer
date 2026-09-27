@@ -7,6 +7,8 @@ import pytest
 from Quant_engine.instruments import EuropeanCall, EuropeanPut
 from Quant_engine.models import BlackScholesModel
 
+#Put-call parity test
+
 #decorator that attaches to the function below a mark with the names and values of the arguments
 #so that pytest creates a test for each set of values
 @pytest.mark.parametrize(
@@ -21,10 +23,10 @@ from Quant_engine.models import BlackScholesModel
         pytest.param(100.0, 100.0, 0.05, 0.05, 0.20, id="short_maturity"),
         pytest.param(100.0, 100.0, 5.0, 0.05, 0.20, id="long_maturity"),
 
-        #tests edge case of no discount
+        # tests edge case of no discount
         pytest.param(100.0, 100.0, 1.0, 0.0, 0.20, id="zero_rate"),
 
-        #tests extreme volatility
+        # tests extreme volatility
         pytest.param(100.0, 100.0, 1.0, 0.05, 0.80, id="high_vol"),
     ],
 )
@@ -44,3 +46,33 @@ def test_put_call_parity(spot, strike, maturity, rate, vol):
 
     expected = spot - strike * math.exp(-rate * maturity)
     assert call_price - put_price == pytest.approx(expected) 
+
+
+# reference test, against the values from: 'Hull, Options, Futures, and Other Derivatives'
+# 8th ed. (Global Edition), Example 14.6, pp. 315-316
+@pytest.mark.parametrize(
+    "option_class, spot, strike, maturity, rate, vol, expected",
+    [
+        pytest.param(
+            EuropeanCall, 42.0, 40.0, 0.5, 0.10, 0.20, 4.76, id="hull_call"
+        ),
+        pytest.param(
+            EuropeanPut, 42.0, 40.0, 0.5, 0.10, 0.20, 0.81, id="hull_put"
+        ),
+    ],
+)
+def test_price_matches_reference(
+    option_class, spot, strike, maturity, rate, vol, expected
+    ):
+    """Prices must match published textbook values.
+
+    Complements the parity test: catches errors inside d1 and d2.
+    The reference is rounded, so the tolerance is half a unit in its
+    last digit (2 decimals in Hull -> abs=0.005).
+    """
+    model = BlackScholesModel(risk_free_rate=rate, volatility=vol)
+    option = option_class(underlying=spot, strike=strike, maturity=maturity)
+
+    price = model.price(option)
+
+    assert price == pytest.approx(expected, abs=0.005)
