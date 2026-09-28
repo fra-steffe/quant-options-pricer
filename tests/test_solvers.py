@@ -1,0 +1,99 @@
+"""Test for Quant_engine.solvers """
+
+import pytest
+
+from Quant_engine.instruments import EuropeanCall, EuropeanPut
+from Quant_engine.models import BlackScholesModel
+from Quant_engine.solvers import newton_raphson
+
+# Market parameters shared by every case. They are not part of the
+# parametrize table because the property under test (the round trip)
+# does not depend on their specific values.
+SPOT = 100.0
+RATE = 0.05
+
+# Tolerance on the recovered volatility. The solver stops on a price
+# tolerance (1e-4), which translates into a volatility error of about
+# 1e-4 / vega. Every passing case below has vega above 4, so the
+# expected volatility error is at most ~2.5e-5: 1e-3 is a wide margin.
+VOL_TOLERANCE = 1e-3
+
+# Same value as the solver's default price tolerance (tol=1e-4).
+PRICE_TOLERANCE = 1e-4
+
+# Reason shared by the known failures of regime 2 (see the table below).
+BRENNER_OTM_REASON = (
+    "Brenner guess is an ATM approximation: for OTM options it starts "
+    "near sigma=0, where vega is ~0, so the solver gives up and returns "
+    "None even though sigma is identifiable. Fix planned in Priority 2."
+)
+
+
+# A single parametrize with volatility as a column, instead of two
+# stacked decorators: the regime (pass or known failure) depends on the
+# combination of moneyness, maturity AND volatility, so each row must be
+# chosen, and marked, individually.
+@pytest.mark.parametrize(
+    "option_class, strike, maturity, true_vol",
+    [
+        # Regime 1: well-posed problem, the solver must recover sigma.
+        pytest.param(EuropeanCall, 100.0, 0.02, 0.20, id="call_atm_short"),
+        pytest.param(EuropeanCall, 100.0, 0.25, 0.20, id="call_atm"),
+        pytest.param(EuropeanCall, 90.0, 0.25, 0.20, id="call_itm"),
+        pytest.param(EuropeanCall, 110.0, 0.25, 0.20, id="call_otm"),
+        pytest.param(EuropeanCall, 70.0, 1.0, 0.20, id="call_deep_itm_long"),
+        pytest.param(EuropeanCall, 160.0, 1.0, 0.50, id="call_deep_otm_hivol"),
+        pytest.param(EuropeanPut, 100.0, 0.25, 0.20, id="put_atm"),
+        pytest.param(EuropeanPut, 110.0, 0.25, 0.20, id="put_itm"),
+        # Regime 2: well-posed problem, but the solver fails today.
+        # strict=True: if a future fix makes these pass, pytest reports
+        # an error so that the xfail mark gets removed.
+        pytest.param(
+            EuropeanCall, 130.0, 0.25, 0.20,
+            id="call_otm_bad_guess",
+            marks=pytest.mark.xfail(strict=True, reason=BRENNER_OTM_REASON),
+        ),
+        pytest.param(
+            EuropeanPut, 90.0, 0.25, 0.20,
+            id="put_otm_bad_guess",
+            marks=pytest.mark.xfail(strict=True, reason=BRENNER_OTM_REASON),
+        ),
+    ],
+)
+def test_newton_raphson_round_trip(option_class, strike, maturity, true_vol):
+    """Price with a known sigma, then the solver must recover it.
+
+    Only covers cases where sigma is identifiable from the price.
+    Ill-posed cases (price insensitive to sigma) need a separate test
+    on how the solver reports failure.
+    """
+    option = option_class(underlying=SPOT, strike=strike, maturity=maturity)
+
+    # Two separate model instances: newton_raphson overwrites model.sigma
+    # (side effect), so the model that generates the price must not be
+    # the one handed to the solver.
+    pricing_model = BlackScholesModel(risk_free_rate=RATE, volatility=true_vol)
+    market_price = pricing_model.price(option)
+
+    # The starting volatility is a placeholder: the solver replaces it
+    # with its own initial guess (Brenner-Subrahmanyam) before iterating.
+    solver_model = BlackScholesModel(risk_free_rate=RATE, volatility=0.0)
+    implied_vol = newton_raphson(solver_model, option, market_price)
+
+    # Checked first and on its own, so that a solver failure reads as
+    # "returned None" instead of a confusing TypeError in the next line.
+    assert implied_vol is not None
+
+    # TEST1: the solver recovers the volatility used to generate the price.
+    assert implied_vol == pytest.approx(true_vol, abs=VOL_TOLERANCE)
+
+    # TEST2: repricing with the recovered volatility gives back the market
+    # price, i.e. the solver keeps its own promise (price tolerance).
+    # A fresh model is used instead of solver_model, so the check does
+    # not rely on the solver's side effect.
+    check_model = BlackScholesModel(
+        risk_free_rate=RATE, volatility=implied_vol
+    )
+    assert check_model.price(option) == pytest.approx(
+        market_price, abs=PRICE_TOLERANCE
+    )
