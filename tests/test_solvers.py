@@ -1,4 +1,19 @@
-"""Test for Quant_engine.solvers """
+"""Tests for Quant_engine.solvers.
+
+Map of the file, grouped by what each test checks. Update it when a
+test is added, renamed or removed.
+
+1. The solver recovers sigma (well-posed cases)
+   - test_newton_raphson_round_trip: price with a known sigma, then the
+     solver must recover it, across moneyness, maturity and volatility.
+   - test_newton_raphson_forward_atm: the same at the forward ATM point,
+     where the Manaster-Koehler initial guess is exactly zero.
+
+2. The solver fails explicitly (sigma not identifiable)
+   - test_newton_raphson_returns_none_at_expiry: at or below
+     BlackScholesModel.TIME_EPSILON the price does not depend on sigma,
+     so the solver must return None.
+"""
 
 import pytest
 
@@ -6,9 +21,10 @@ from Quant_engine.instruments import EuropeanCall, EuropeanPut
 from Quant_engine.models import BlackScholesModel
 from Quant_engine.solvers import newton_raphson
 
-# Market parameters shared by every case. They are not part of the
-# parametrize table because the property under test (the round trip)
-# does not depend on their specific values.
+# ---------------------------------------------------------------------
+# Shared parameters
+# ---------------------------------------------------------------------
+
 SPOT = 100.0
 RATE = 0.05
 
@@ -21,11 +37,11 @@ VOL_TOLERANCE = 1e-3
 # Same value as the solver's default price tolerance (tol=1e-4).
 PRICE_TOLERANCE = 1e-4
 
+# ---------------------------------------------------------------------
+# 1. The solver recovers sigma
+# ---------------------------------------------------------------------
 
-# A single parametrize with volatility as a column, instead of two
-# stacked decorators: the regime (pass or known failure) depends on the
-# combination of moneyness, maturity AND volatility, so each row must be
-# chosen, and marked, individually.
+
 @pytest.mark.parametrize(
     "option_class, strike, maturity, true_vol",
     [
@@ -38,9 +54,7 @@ PRICE_TOLERANCE = 1e-4
         pytest.param(EuropeanCall, 160.0, 1.0, 0.50, id="call_deep_otm_hivol"),
         pytest.param(EuropeanPut, 100.0, 0.25, 0.20, id="put_atm"),
         pytest.param(EuropeanPut, 110.0, 0.25, 0.20, id="put_itm"),
-        # Regime 2: well-posed but far OTM. Failed with the Brenner guess,
-        # which starts near sigma = 0 where vega is ~0; fixed by the
-        # Manaster-Koehler guess.
+        # Regime 2: well-posed but far OTM.
         pytest.param(EuropeanCall, 130.0, 0.25, 0.20, id="call_otm_far"),
         pytest.param(EuropeanPut, 90.0, 0.25, 0.20, id="put_otm_far"),
     ],
@@ -61,7 +75,7 @@ def test_newton_raphson_round_trip(option_class, strike, maturity, true_vol):
     market_price = pricing_model.price(option)
 
     # The starting volatility is a placeholder: the solver replaces it
-    # with its own initial guess (Brenner-Subrahmanyam) before iterating.
+    # with its own initial guess (see initial_guess) before iterating.
     solver_model = BlackScholesModel(risk_free_rate=RATE, volatility=0.0)
     implied_vol = newton_raphson(solver_model, option, market_price)
 
@@ -84,9 +98,7 @@ def test_newton_raphson_round_trip(option_class, strike, maturity, true_vol):
     )
 
 
-
-
-# test for the Degenerate point of the Manaster-Koehler initial guess. Its formula,
+# degenerate point of the Manaster-Koehler initial guess. Its formula,
 # sqrt(2 * |ln(S/K) + r*T| / T), is exactly zero when K equals the
 # forward price S*exp(r*T), and at sigma = 0 d1 is 0/0. With r = 0 and
 # K = S the log-moneyness is exactly 0.0 in floating point, so this is
@@ -106,8 +118,8 @@ def test_newton_raphson_forward_atm(option_class):
 
     Kept apart from the round-trip test because it needs a different
     rate (r = 0), while the round-trip test uses one shared RATE.
-    It passes today (Brenner is an ATM approximation) and guards the
-    special case needed once the Manaster-Koehler guess is in place.
+    Guards the special case of the solver's initial guess: 
+    here the Manaster-Koehler guess is exactly 0 and Brenner is used instead."
     Does not catch: points near, but not exactly at, the forward, where
     the log-moneyness is a tiny non-zero number and the guess is valid.
     """
@@ -128,9 +140,9 @@ def test_newton_raphson_forward_atm(option_class):
     assert implied_vol == pytest.approx(true_vol, abs=VOL_TOLERANCE)
 
 
-
-
-# Test for the failures when T=0.
+# ---------------------------------------------------------------------
+# 2. The solver fails explicitly
+# ---------------------------------------------------------------------
 
 @pytest.mark.parametrize(
     "maturity, market_price",
