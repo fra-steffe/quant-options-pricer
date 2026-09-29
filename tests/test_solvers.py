@@ -145,36 +145,18 @@ def test_newton_raphson_forward_atm(option_class):
 
 
 
-# Test for teh failures when T=0.
-#  Reason shared by the known failures at expiry (see the table below).
-EXPIRY_CRASH_REASON = (
-    "At expiry Brenner_guess returns None and the solver stores it in "
-    "model.sigma. price() ignores sigma and returns the payoff, so when "
-    "the market price equals the payoff the solver 'converges' and "
-    "crashes formatting None in its print. Fix: check expiry at the "
-    "start of newton_raphson."
-)
-
+# Test for the failures when T=0.
 
 @pytest.mark.parametrize(
     "maturity, market_price",
     [
         # Market price different from the payoff (10.0): no sigma can
-        # reproduce it. Returns None today, but only because vega is 0;
-        # this row pins that outcome as a decision.
+        # reproduce it.
         pytest.param(0.0, 12.0, id="expired_price_off_payoff"),
-        pytest.param(
-            0.0, 10.0,
-            id="expired_price_on_payoff",
-            marks=pytest.mark.xfail(strict=True, reason=EXPIRY_CRASH_REASON),
-        ),
+        pytest.param(0.0, 10.0, id="expired_price_on_payoff"),
         # Boundary test: exactly at the threshold the option counts as
         # expired (the model uses <=), so the solver must agree.
-        pytest.param(
-            BlackScholesModel.TIME_EPSILON, 10.0,
-            id="at_threshold_price_on_payoff",
-            marks=pytest.mark.xfail(strict=True, reason=EXPIRY_CRASH_REASON),
-        ),
+        pytest.param(BlackScholesModel.TIME_EPSILON, 10.0, id="at_threshold_price_on_payoff")
     ],
 )
 def test_newton_raphson_returns_none_at_expiry(maturity, market_price):
