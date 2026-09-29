@@ -9,6 +9,41 @@ def Brenner_guess(option, market_price: float) -> float:
    # Assumes T > BlackScholesModel.TIME_EPSILON: newton_raphson returns
    # None for expired options before calling this function. 
     return np.sqrt(2 * np.pi / T) * (market_price / S)
+
+def manaster_koehler_guess(option, rate: float) -> float:
+    """Initial guess of Manaster and Koehler (1982).
+
+    Returns the sigma at which vega is maximal, sqrt(2|ln(S/K) + rT| / T).
+    There the Black-Scholes price, as a function of sigma, changes from
+    convex to concave (inflection point), and Newton-Raphson started from
+    it converges monotonically to the implied volatility whenever the
+    price is within the no-arbitrage bounds. Unlike Brenner, it does not
+    use the market price: it chooses where to start, it is not an
+    estimate of the answer.
+    Returns exactly 0.0 when K equals the forward S*exp(rT): the caller
+    must handle that point. Assumes T > BlackScholesModel.TIME_EPSILON.
+    """
+    S = option.underlying
+    K = option.strike
+    T = option.T
+    # ln(S/K) + rT = ln(F/K): log-moneyness with respect to the forward.
+    forward_log_moneyness = np.log(S / K) + rate * T
+    return np.sqrt(2 * abs(forward_log_moneyness) / T)
+
+#function to deal with the initial guess, which will be manaster everywhere but the 
+#single point where Manaster is 0
+def _initial_guess(model, option, market_price: float) -> float:
+    """Starting sigma for newton_raphson: Manaster-Koehler, or Brenner
+    at the single point where Manaster-Koehler is zero."""
+    sigma0 = manaster_koehler_guess(option, model.r)
+    # Exact comparison on purpose: it does not check that two computed
+    # values are equal, it guards the only point where the guess is
+    # unusable. At sigma = 0, d1 is 0/0 (nan) and Newton never recovers,
+    # while any positive guess, however small, works. At the forward ATM
+    # point Brenner is accurate, since it is an ATM approximation.
+    if sigma0 == 0.0:
+        return Brenner_guess(option, market_price)
+    return sigma0
     
 #Metodo di Newton-Raphson per trovare la volatilità implicita dato un prezzo di mercato
 def newton_raphson(model, option, market_price: float, tol = 1e-4, max_iter = 100):
@@ -21,7 +56,7 @@ def newton_raphson(model, option, market_price: float, tol = 1e-4, max_iter = 10
     if option.T <= BlackScholesModel.TIME_EPSILON:
         return None
     
-    model.sigma = Brenner_guess(option, market_price) #partiamo da una stima iniziale della volatilità (valore default, meglio implementare la formula di brenner per gesitre casi estremi OTM)
+    model.sigma = _initial_guess(model, option, market_price)
     #Iteriamo fino a raggiungere la convergenza o il numero massimo di iterazioni
     
     for i in range(max_iter):

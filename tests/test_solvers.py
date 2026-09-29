@@ -21,13 +21,6 @@ VOL_TOLERANCE = 1e-3
 # Same value as the solver's default price tolerance (tol=1e-4).
 PRICE_TOLERANCE = 1e-4
 
-# Reason shared by the known failures of regime 2 (see the table below).
-BRENNER_OTM_REASON = (
-    "Brenner guess is an ATM approximation: for OTM options it starts "
-    "near sigma=0, where vega is ~0, so the solver gives up and returns "
-    "None even though sigma is identifiable. Fix planned in Priority 2."
-)
-
 
 # A single parametrize with volatility as a column, instead of two
 # stacked decorators: the regime (pass or known failure) depends on the
@@ -45,19 +38,11 @@ BRENNER_OTM_REASON = (
         pytest.param(EuropeanCall, 160.0, 1.0, 0.50, id="call_deep_otm_hivol"),
         pytest.param(EuropeanPut, 100.0, 0.25, 0.20, id="put_atm"),
         pytest.param(EuropeanPut, 110.0, 0.25, 0.20, id="put_itm"),
-        # Regime 2: well-posed problem, but the solver fails today.
-        # strict=True: if a future fix makes these pass, pytest reports
-        # an error so that the xfail mark gets removed.
-        pytest.param(
-            EuropeanCall, 130.0, 0.25, 0.20,
-            id="call_otm_bad_guess",
-            marks=pytest.mark.xfail(strict=True, reason=BRENNER_OTM_REASON),
-        ),
-        pytest.param(
-            EuropeanPut, 90.0, 0.25, 0.20,
-            id="put_otm_bad_guess",
-            marks=pytest.mark.xfail(strict=True, reason=BRENNER_OTM_REASON),
-        ),
+        # Regime 2: well-posed but far OTM. Failed with the Brenner guess,
+        # which starts near sigma = 0 where vega is ~0; fixed by the
+        # Manaster-Koehler guess.
+        pytest.param(EuropeanCall, 130.0, 0.25, 0.20, id="call_otm_far"),
+        pytest.param(EuropeanPut, 90.0, 0.25, 0.20, id="put_otm_far"),
     ],
 )
 def test_newton_raphson_round_trip(option_class, strike, maturity, true_vol):
