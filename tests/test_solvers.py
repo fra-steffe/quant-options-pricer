@@ -13,13 +13,18 @@ test is added, renamed or removed.
    - test_newton_raphson_returns_none_at_expiry: at or below
      BlackScholesModel.TIME_EPSILON the price does not depend on sigma,
      so the solver must return None.
+
+3. The initial guess
+   - test_manaster_koehler_guess_maximizes_vega: the Manaster-Koehler
+     guess is the sigma at which vega is maximal, the property that
+     makes it a safe starting point for Newton.
 """
 
 import pytest
 
 from Quant_engine.instruments import EuropeanCall, EuropeanPut
 from Quant_engine.models import BlackScholesModel
-from Quant_engine.solvers import newton_raphson
+from Quant_engine.solvers import manaster_koehler_guess, newton_raphson
 
 # ---------------------------------------------------------------------
 # Shared parameters
@@ -170,3 +175,35 @@ def test_newton_raphson_returns_none_at_expiry(maturity, market_price):
     solver_model = BlackScholesModel(risk_free_rate=RATE, volatility=0.2)
 
     assert newton_raphson(solver_model, option, market_price) is None
+
+
+# ---------------------------------------------------------------------
+# 3. The initial guess
+# ---------------------------------------------------------------------
+# Relative bump used to check that vega is maximal at the guess. 
+# Limit: an error that moves the guess by less than about 1% can pass.
+VEGA_BUMP = 0.01
+
+
+@pytest.mark.parametrize(
+    "strike, maturity",
+    [
+        pytest.param(130.0, 0.25, id="otm"),
+        pytest.param(70.0, 1.0, id="itm"),
+        # ln(S/K) and r*T nearly cancel: the guess depends mostly on the
+        # rate term, so an error in r*T (e.g. its sign) shows up here.
+        pytest.param(105.0, 1.0, id="near_forward"),
+        pytest.param(160.0, 3.0, id="otm_long"),
+    ],
+)
+def test_manaster_koehler_guess_maximizes_vega(strike, maturity):
+    """Vega is maximal at the Manaster-Koehler guess."""
+    option = EuropeanCall(underlying=SPOT, strike=strike, maturity=maturity)
+    guess = manaster_koehler_guess(option, RATE)
+
+    def vega_at(sigma):
+        model = BlackScholesModel(risk_free_rate=RATE, volatility=sigma)
+        return model.vega(option)
+
+    assert vega_at(guess) >= vega_at(guess * (1 + VEGA_BUMP))
+    assert vega_at(guess) >= vega_at(guess * (1 - VEGA_BUMP))
