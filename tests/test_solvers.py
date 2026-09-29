@@ -97,3 +97,47 @@ def test_newton_raphson_round_trip(option_class, strike, maturity, true_vol):
     assert check_model.price(option) == pytest.approx(
         market_price, abs=PRICE_TOLERANCE
     )
+
+
+
+
+# test for the Degenerate point of the Manaster-Koehler initial guess. Its formula,
+# sqrt(2 * |ln(S/K) + r*T| / T), is exactly zero when K equals the
+# forward price S*exp(r*T), and at sigma = 0 d1 is 0/0. With r = 0 and
+# K = S the log-moneyness is exactly 0.0 in floating point, so this is
+# the case that reaches the degenerate point for sure.
+FORWARD_ATM_RATE = 0.0
+
+
+@pytest.mark.parametrize(
+    "option_class",
+    [
+        pytest.param(EuropeanCall, id="call"),
+        pytest.param(EuropeanPut, id="put"),
+    ],
+)
+def test_newton_raphson_forward_atm(option_class):
+    """At the forward ATM point the solver must still recover sigma.
+
+    Kept apart from the round-trip test because it needs a different
+    rate (r = 0), while the round-trip test uses one shared RATE.
+    It passes today (Brenner is an ATM approximation) and guards the
+    special case needed once the Manaster-Koehler guess is in place.
+    Does not catch: points near, but not exactly at, the forward, where
+    the log-moneyness is a tiny non-zero number and the guess is valid.
+    """
+    true_vol = 0.20
+    option = option_class(underlying=SPOT, strike=SPOT, maturity=0.25)
+
+    pricing_model = BlackScholesModel(
+        risk_free_rate=FORWARD_ATM_RATE, volatility=true_vol
+    )
+    market_price = pricing_model.price(option)
+
+    solver_model = BlackScholesModel(
+        risk_free_rate=FORWARD_ATM_RATE, volatility=0.0
+    )
+    implied_vol = newton_raphson(solver_model, option, market_price)
+
+    assert implied_vol is not None
+    assert implied_vol == pytest.approx(true_vol, abs=VOL_TOLERANCE)
