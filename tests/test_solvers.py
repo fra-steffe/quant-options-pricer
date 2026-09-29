@@ -13,6 +13,10 @@ test is added, renamed or removed.
    - test_newton_raphson_returns_none_at_expiry: at or below
      BlackScholesModel.TIME_EPSILON the price does not depend on sigma,
      so the solver must return None.
+   - test_newton_raphson_returns_none_when_ill_posed: when vega is so
+     small that the price pins sigma only within a band wider than the
+     solver's vol_tol, the solver must return None instead of a sigma
+     picked from inside the band.
 
 3. The initial guess
    - test_manaster_koehler_guess_maximizes_vega: the Manaster-Koehler
@@ -35,8 +39,9 @@ RATE = 0.05
 
 # Tolerance on the recovered volatility. The solver stops on a price
 # tolerance (1e-4), which translates into a volatility error of about
-# 1e-4 / vega. Every passing case below has vega above 4, so the
-# expected volatility error is at most ~2.5e-5: 1e-3 is a wide margin.
+# 1e-4 / vega. Every case below has vega above 0.3 (the lowest,
+# call_low_vega, on purpose), so the expected volatility error is at
+# most ~3e-4: 1e-3 still leaves a margin.
 VOL_TOLERANCE = 1e-3
 
 # Same value as the solver's default price tolerance (tol=1e-4).
@@ -59,6 +64,10 @@ PRICE_TOLERANCE = 1e-4
         pytest.param(EuropeanCall, 160.0, 1.0, 0.50, id="call_deep_otm_hivol"),
         pytest.param(EuropeanPut, 100.0, 0.25, 0.20, id="put_atm"),
         pytest.param(EuropeanPut, 110.0, 0.25, 0.20, id="put_itm"),
+        # Low but sufficient vega (0.35): sigma is pinned within
+        # 1e-4 / 0.35 = 3e-4, below the solver's vol_tol (1e-3). Guards
+        # against a check for ill-posed cases that rejects too much.
+        pytest.param(EuropeanCall, 85.0, 0.1, 0.20, id="call_low_vega"),
         # Regime 2: well-posed but far OTM.
         pytest.param(EuropeanCall, 130.0, 0.25, 0.20, id="call_otm_far"),
         pytest.param(EuropeanPut, 90.0, 0.25, 0.20, id="put_otm_far"),
@@ -173,6 +182,66 @@ def test_newton_raphson_returns_none_at_expiry(maturity, market_price):
     """
     option = EuropeanCall(underlying=110.0, strike=100.0, maturity=maturity)
     solver_model = BlackScholesModel(risk_free_rate=RATE, volatility=0.2)
+
+    assert newton_raphson(solver_model, option, market_price) is None
+
+
+# Reason shared by the known failures of regime 3 (see the table below).
+ILL_POSED_REASON = (
+    "Regime 3: vega is so small that every sigma in a wide band "
+    "reprices within tol. The solver stops on one of them and returns "
+    "it as the answer. Fix: return None when tol / vega > vol_tol."
+)
+
+
+@pytest.mark.parametrize(
+    "option_class, strike, maturity, true_vol",
+    [
+        # Short-dated OTM: the case the Manaster-Koehler guess turned
+        # from None into a wrong sigma. Band half-width ~4e-3.
+        pytest.param(
+            EuropeanCall, 110.0, 0.02, 0.20,
+            id="call_otm_short",
+            marks=pytest.mark.xfail(strict=True, reason=ILL_POSED_REASON),
+        ),
+        pytest.param(
+            EuropeanPut, 90.0, 0.02, 0.20,
+            id="put_otm_short",
+            marks=pytest.mark.xfail(strict=True, reason=ILL_POSED_REASON),
+        ),
+        # Deep ITM: the price (~41) is not small, but almost all of it is
+        # intrinsic value, which does not depend on sigma.
+        pytest.param(
+            EuropeanCall, 65.0, 2.0, 0.10,
+            id="call_deep_itm",
+            marks=pytest.mark.xfail(strict=True, reason=ILL_POSED_REASON),
+        ),
+        # Deep OTM: the price is essentially zero (~1e-24).
+        pytest.param(
+            EuropeanCall, 130.0, 0.25, 0.05,
+            id="call_deep_otm",
+            marks=pytest.mark.xfail(strict=True, reason=ILL_POSED_REASON),
+        ),
+    ],
+)
+def test_newton_raphson_returns_none_when_ill_posed(
+    option_class, strike, maturity, true_vol
+):
+    """When the price does not pin sigma down, the solver returns None.
+
+    The price is generated with a known sigma, but vega is so small that
+    a whole band of sigmas reprices within the solver's price tolerance.
+    Any sigma from that band would look like an answer: the solver must
+    refuse to pick one. Cases are chosen well inside the ill-posed
+    region (band at least 2x the solver's vol_tol), not at its border.
+    Does not catch: a threshold that rejects well-posed cases (see
+    call_low_vega in the round-trip test).
+    """
+    option = option_class(underlying=SPOT, strike=strike, maturity=maturity)
+    pricing_model = BlackScholesModel(risk_free_rate=RATE, volatility=true_vol)
+    market_price = pricing_model.price(option)
+
+    solver_model = BlackScholesModel(risk_free_rate=RATE, volatility=0.0)
 
     assert newton_raphson(solver_model, option, market_price) is None
 
