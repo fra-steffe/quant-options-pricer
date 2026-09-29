@@ -46,7 +46,7 @@ def _initial_guess(model, option, market_price: float) -> float:
     return sigma0
     
 #Metodo di Newton-Raphson per trovare la volatilità implicita dato un prezzo di mercato
-def newton_raphson(model, option, market_price: float, tol = 1e-4, max_iter = 100):
+def newton_raphson(model, option, market_price: float, tol = 1e-4, max_iter = 100, vol_tol = 1e-3):
 
     # At or below the model's expiry threshold price() returns the payoff
     # whatever sigma is, so sigma is not identifiable. Checked here, before
@@ -69,6 +69,14 @@ def newton_raphson(model, option, market_price: float, tol = 1e-4, max_iter = 10
         
         # se l'errore è abbastanza piccolo, consideriamo la soluzione trovata
         if abs(error) < tol:
+            # A price error up to tol means a sigma error up to about
+            # tol / vega. If vega is so small that this band is wider
+            # than vol_tol, many sigmas reprice within tol and this one
+            # is just the first found: return None instead of a sigma
+            # the price does not determine. Written as a product, not
+            # tol / vega, so that vega = 0 cannot divide by zero.
+            if model.vega(option) * vol_tol < tol:
+                   return None
             print(f"Converged in {i} iterations. Implied Volatility: {model.sigma:.4f}")
             return model.sigma
         

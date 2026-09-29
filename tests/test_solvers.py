@@ -186,42 +186,18 @@ def test_newton_raphson_returns_none_at_expiry(maturity, market_price):
     assert newton_raphson(solver_model, option, market_price) is None
 
 
-# Reason shared by the known failures of regime 3 (see the table below).
-ILL_POSED_REASON = (
-    "Regime 3: vega is so small that every sigma in a wide band "
-    "reprices within tol. The solver stops on one of them and returns "
-    "it as the answer. Fix: return None when tol / vega > vol_tol."
-)
-
-
 @pytest.mark.parametrize(
     "option_class, strike, maturity, true_vol",
     [
         # Short-dated OTM: the case the Manaster-Koehler guess turned
         # from None into a wrong sigma. Band half-width ~4e-3.
-        pytest.param(
-            EuropeanCall, 110.0, 0.02, 0.20,
-            id="call_otm_short",
-            marks=pytest.mark.xfail(strict=True, reason=ILL_POSED_REASON),
-        ),
-        pytest.param(
-            EuropeanPut, 90.0, 0.02, 0.20,
-            id="put_otm_short",
-            marks=pytest.mark.xfail(strict=True, reason=ILL_POSED_REASON),
-        ),
+        pytest.param(EuropeanCall, 110.0, 0.02, 0.20, id="call_otm_short"),
+        pytest.param(EuropeanPut, 90.0, 0.02, 0.20, id="put_otm_short"),
         # Deep ITM: the price (~41) is not small, but almost all of it is
         # intrinsic value, which does not depend on sigma.
-        pytest.param(
-            EuropeanCall, 65.0, 2.0, 0.10,
-            id="call_deep_itm",
-            marks=pytest.mark.xfail(strict=True, reason=ILL_POSED_REASON),
-        ),
+        pytest.param(EuropeanCall, 65.0, 2.0, 0.10, id="call_deep_itm"),
         # Deep OTM: the price is essentially zero (~1e-24).
-        pytest.param(
-            EuropeanCall, 130.0, 0.25, 0.05,
-            id="call_deep_otm",
-            marks=pytest.mark.xfail(strict=True, reason=ILL_POSED_REASON),
-        ),
+        pytest.param(EuropeanCall, 130.0, 0.25, 0.05, id="call_deep_otm")
     ],
 )
 def test_newton_raphson_returns_none_when_ill_posed(
