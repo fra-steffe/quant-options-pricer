@@ -141,3 +141,53 @@ def test_newton_raphson_forward_atm(option_class):
 
     assert implied_vol is not None
     assert implied_vol == pytest.approx(true_vol, abs=VOL_TOLERANCE)
+
+
+
+
+# Test for teh failures when T=0.
+#  Reason shared by the known failures at expiry (see the table below).
+EXPIRY_CRASH_REASON = (
+    "At expiry Brenner_guess returns None and the solver stores it in "
+    "model.sigma. price() ignores sigma and returns the payoff, so when "
+    "the market price equals the payoff the solver 'converges' and "
+    "crashes formatting None in its print. Fix: check expiry at the "
+    "start of newton_raphson."
+)
+
+
+@pytest.mark.parametrize(
+    "maturity, market_price",
+    [
+        # Market price different from the payoff (10.0): no sigma can
+        # reproduce it. Returns None today, but only because vega is 0;
+        # this row pins that outcome as a decision.
+        pytest.param(0.0, 12.0, id="expired_price_off_payoff"),
+        pytest.param(
+            0.0, 10.0,
+            id="expired_price_on_payoff",
+            marks=pytest.mark.xfail(strict=True, reason=EXPIRY_CRASH_REASON),
+        ),
+        # Boundary test: exactly at the threshold the option counts as
+        # expired (the model uses <=), so the solver must agree.
+        pytest.param(
+            BlackScholesModel.TIME_EPSILON, 10.0,
+            id="at_threshold_price_on_payoff",
+            marks=pytest.mark.xfail(strict=True, reason=EXPIRY_CRASH_REASON),
+        ),
+    ],
+)
+def test_newton_raphson_returns_none_at_expiry(maturity, market_price):
+    """At expiry sigma is not identifiable: the solver must return None.
+
+    At or below BlackScholesModel.TIME_EPSILON the model prices the
+    option at its payoff whatever sigma is, so any sigma the solver
+    returned would be arbitrary. Uses an ITM call (S=110, K=100) so the
+    payoff, 10.0, is not zero.
+    Does not catch: ill-posed cases before expiry (regime 3), which
+    need their own test.
+    """
+    option = EuropeanCall(underlying=110.0, strike=100.0, maturity=maturity)
+    solver_model = BlackScholesModel(risk_free_rate=RATE, volatility=0.2)
+
+    assert newton_raphson(solver_model, option, market_price) is None
