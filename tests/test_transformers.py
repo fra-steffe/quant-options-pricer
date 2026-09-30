@@ -61,7 +61,6 @@ def test_only_rows_with_valid_quote_are_kept(bid, ask, expected_rows):
             "strike": [100.0],
             "bid": [bid],
             "ask": [ask],
-            "volume": [10.0],
             "option_type": ["call"],
         }
     )

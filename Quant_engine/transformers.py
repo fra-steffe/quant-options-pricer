@@ -31,10 +31,7 @@ class YahooDataTransformer:
 
         # elimina le righe con valori nulli sulle colonne d'interesse
         # Missing bid/ask are handled by the quote filter below.
-        clean_df = clean_df.dropna(subset = ["strike", 'volume'])
-
-        #filter out illiquid options
-        clean_df = clean_df[clean_df['volume'] > 0]
+        clean_df = clean_df.dropna(subset = ["strike"])
 
         # Cast to float before comparing and averaging the quotes.
         clean_df['strike'] = clean_df['strike'].astype(float)
