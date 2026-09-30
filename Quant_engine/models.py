@@ -3,7 +3,7 @@ from scipy.stats import norm
 from Quant_engine.instruments import EuropeanCall, EuropeanPut
 
 class BlackScholesModel:
-   # Definiamo un epsilon (circa mezz'ora di tempo) sotto il quale l'opzione è "scaduta"
+   # Definiamo un epsilon sotto il quale l'opzione è "scaduta"
    # Questo è importante per evitare problemi numerici quando T è molto piccolo, poiché d1 e d2 possono diventare instabili.
     TIME_EPSILON = 1e-6
    
