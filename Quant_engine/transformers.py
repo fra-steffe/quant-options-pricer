@@ -29,15 +29,26 @@ class YahooDataTransformer:
         #Crea una copia indipendente del DataFrame per non alterare i dati originali in memoria.
         clean_df = raw_df.copy()
 
-        #elimina le righe con valori nulli sulle colonne d'interesse
-        clean_df = clean_df.dropna(subset = ["strike", "lastPrice", 'volume'])
+        # elimina le righe con valori nulli sulle colonne d'interesse
+        # Missing bid/ask are handled by the quote filter below.
+        clean_df = clean_df.dropna(subset = ["strike", 'volume'])
 
-        #Mantieni solo le righe per opzioni liquide
+        #filter out illiquid options
         clean_df = clean_df[clean_df['volume'] > 0]
 
-        #Forza la conversione delle colonne 'strike' e 'lastPrice' al tipo di dato float
+        # Cast to float before comparing and averaging the quotes.
         clean_df['strike'] = clean_df['strike'].astype(float)
-        clean_df['lastPrice'] = clean_df['lastPrice'].astype(float)
+        clean_df['bid'] = clean_df['bid'].astype(float)
+        clean_df['ask'] = clean_df['ask'].astype(float)
+
+        # Market price = mid (()bid + ask / 2). we also filter for options 
+        # with bid > 0 and ask >= bid. A lso drops NaN
+        valid_quote = (
+            (clean_df['bid'] > 0)
+            & (clean_df['ask'] >= clean_df['bid'])
+        )
+        clean_df = clean_df[valid_quote]
+        clean_df['mid'] = (clean_df['bid'] + clean_df['ask']) / 2
 
         return clean_df
     
@@ -61,7 +72,7 @@ class YahooDataTransformer:
         
         for index, row in clean_df.iterrows():
             strike = row['strike']
-            price = row["lastPrice"]
+            price = row["mid"]
             option_type = str(row["option_type"]).strip().lower()
 
             #instanziazione dell'oggetto corretto
