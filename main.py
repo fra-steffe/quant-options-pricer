@@ -7,7 +7,7 @@ from Quant_engine.instruments import EuropeanCall, EuropeanPut
 from Quant_engine.models import BlackScholesModel, MonteCarloPricer
 from Quant_engine.solvers import newton_raphson
 from Quant_engine.scrapers import YahooProvider
-from Quant_engine.transformers import YahooDataTransformer
+from Quant_engine.transformers import YahooDataTransformer, keep_otm
 import pandas as pd
 
 #initial configuration
@@ -53,6 +53,9 @@ def main():
 
     #TRASFORMAZIONE
     option_list = tranformer.transform_to_objects(raw_data, UNDERLYING_PRICE, expiry)
+
+    #keep only OTM options
+    option_list = keep_otm(option_list, RISK_FREE_RATE)
 
     #MOTORE DI CALCOLO
     results = []

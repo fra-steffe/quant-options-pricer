@@ -1,3 +1,5 @@
+import math
+
 import pandas as pd
 from datetime import datetime
 from Quant_engine.instruments import EuropeanCall, EuropeanPut
@@ -38,8 +40,10 @@ class YahooDataTransformer:
         clean_df['bid'] = clean_df['bid'].astype(float)
         clean_df['ask'] = clean_df['ask'].astype(float)
 
-        # Market price = mid (()bid + ask / 2). we also filter for options 
-        # with bid > 0 and ask >= bid. A lso drops NaN
+        # Market price = mid ((bid + ask) / 2). we also filter for options 
+        # with bid > 0 and ask >= bid. Written as "keep if valid"
+        # so NaN quotes are dropped too: comparisons with NaN are False
+
         valid_quote = (
             (clean_df['bid'] > 0)
             & (clean_df['ask'] >= clean_df['bid'])
@@ -86,4 +90,29 @@ class YahooDataTransformer:
                                  "option_type": option_type.capitalize()#salva come 'Call' o 'Put'
                                  })
         return options_list
+
+
+def keep_otm(options:list, rate:float) -> list:
+    """Keep calls with K >= F and puts with K < F, F = S * exp(r * T), where 
+    the forward is the ATM point.
+    Call and put with the same strike have the same implied volatility,
+    so one contract per strike loses nothing. The OTM one is almost all
+    time value, trades with tighter spreads and carries almost no
+    early-exercise premium when the option is American.
+    """
+    otm_options = []
+    for item in options:
+        option = item["instruments"]
+        forward = option.underlying * math.exp(rate * option.T)
+        if isinstance(option, EuropeanCall):
+            is_otm = option.strike >= forward
+        else:
+            is_otm = option.strike < forward
+        if is_otm:
+            otm_options.append(item)
+    return otm_options
+
+
+
+
             
