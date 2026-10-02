@@ -58,9 +58,6 @@ def test_only_rows_with_valid_quote_are_kept(bid, ask, expected_rows):
  
     Does not check the mid value itself, a one-line average.
     """
-    # volume > 0 on purpose: with volume 0 the row would be dropped by
-    # the volume filter, and the dropped cases would pass for the
-    # wrong reason.
     raw_chain = pd.DataFrame(
         {
             "strike": [100.0],
