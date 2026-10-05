@@ -10,7 +10,10 @@ synthetic cases it recovers every identifiable volatility and never
 returns a wrong one
 (see [Solver](#solver-when-implied-volatility-is-not-identifiable)).
 
-<!-- ![AAPL implied-volatility smile](images/smile_aapl.png) -->
+![AAPL implied-volatility smile](images/smile_aapl.png)
+
+*AAPL, 5 October 2026, expiry 6 November 2026. Dashed line: spot. The
+boundary between puts and calls is the forward, slightly to the right.*
 
 ## Quick start
 
@@ -116,35 +119,33 @@ so the border moves with the level of the spot.
 
 ## Results on AAPL
 
-Run of 2 October 2026, about 18:40 Italian time, expiry 6 November 2026
-(35 days), spot 333.29:
+Run of 5 October 2026, about 18:00 Italian time, expiry 6 November 2026
+(32 days), spot 333.49 (the plot at the top):
 
 ```
-Contracts in chain:            50
-  dropped, no valid quote:      0
-  dropped, ITM:                20
-  rejected by solver:           0
-Implied vols computed:         30
+Contracts in chain:          74
+  dropped, no valid quote:    8
+  dropped, ITM:              30
+  rejected by solver:         0
+Implied vols computed:       36
 ```
 
 The smile has the usual equity skew: put IVs rise steeply as the strike
 falls, call IVs are flatter.
 
-**Gap at the money.** Put and call IVs do not join at the forward: the
-put just below it has an IV about 2 vol points higher than the call
-just above it. The forward implied by put–call parity,
-F = K + (C − P)·e^(rT), comes out below S·e^(rT), and by the same
-amount on every strike near the money. So the model forward is too
-high, which lowers call IVs and raises put IVs at the money (observed on
-AAPL runs in October 2026). The parity forward cannot separate the
-error in r, the missing dividend yield and the effect of American
-exercise.
+**Gap at the money.** Put and call IVs need not join exactly at the
+forward, because the forward is built from assumed inputs (see below).
+On 2 October 2026 the put just below the forward had an IV about
+2 vol points higher than the call just above it; in the run above the
+difference is under half a point. Whether the gap comes from the
+flat-rate, zero-dividend forward or from quotes that are not
+synchronous with the spot is not yet settled.
 
 **Wings.** Far from the money, mid prices are a few cents, close to the
 minimum tick, and on longer expiries they are not always monotone in
-the strike, which no arbitrage-free set of prices allows. The IVs
-computed there are noise. The solver does not reject them: see the
-first limitation below.
+the strike (seen on the March 2027 expiry on 2 October 2026), which no
+arbitrage-free set of prices allows. The IVs computed there are noise.
+The solver does not reject them: see the first limitation below.
 
 ## Assumptions and limitations
 
@@ -153,8 +154,9 @@ first limitation below.
   least 0.005 and often much more. The identifiability check above
   therefore works on synthetic prices but rejects nothing on Yahoo
   data, including wing quotes that carry no information on volatility.
-- **Forward.** Flat risk-free rate r = 5%, no dividend yield (q = 0).
-  This is the cause of the gap at the money.
+- **Forward.** F = S·e^(rT) with a flat risk-free rate r = 5% and no
+  dividend yield (q = 0). The out-of-the-money boundary and every price
+  depend on it.
 - **American exercise.** AAPL options are American and are priced here
   as European. Only out-of-the-money options are used, where the
   early-exercise premium is small: calls are almost never exercised
@@ -166,8 +168,8 @@ first limitation below.
 
 ## Next steps
 
-- Implied forward from put–call parity for each expiry, and a dividend
-  yield in the model (Merton), to remove the gap at the money.
+- Forward implied by put–call parity for each expiry, and a dividend
+  yield in the model (Merton), instead of the assumed r and q.
 - Half the bid–ask spread as the price uncertainty in the solver, so
   that noisy quotes are rejected.
 - Implied-volatility surface over several expiries.
